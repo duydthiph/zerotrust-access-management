@@ -1,0 +1,42 @@
+FROM node:16@sha256:68e34cfcd8276ad531b12b3454af5c24cd028752dfccacce4e19efef6f7cdbe0 as ui
+WORKDIR /build
+
+COPY .git ./.git
+COPY Makefile ./Makefile
+
+# download yarn dependencies
+COPY ui/yarn.lock ./ui/yarn.lock
+COPY ui/package.json ./ui/package.json
+RUN make yarn
+
+# build ui
+COPY ./ui/ ./ui/
+RUN make build-ui
+
+FROM golang:1.19.0-buster@sha256:d84495e2ad12dfeb51dec3c9f170659ebd09db234d6990b3364f877785684a14 as build
+WORKDIR /go/src/github.com/pomerium/pomerium
+
+RUN apt-get update \
+    && apt-get -y --no-install-recommends install zip
+
+# cache dependency downloads
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=ui /build/ui/dist ./ui/dist
+
+# build
+RUN make build-debug NAME=pomerium
+RUN touch /config.yaml
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+FROM alpine:latest@sha256:bc41182d7ef5ffc53a40b044e725193bc10142a1243f395ee852a8d9730fc2ad
+ENV AUTOCERT_DIR /data/autocert
+WORKDIR /pomerium
+RUN apk add --no-cache ca-certificates libc6-compat gcompat
+COPY --from=build /go/src/github.com/pomerium/pomerium/bin/* /bin/
+COPY --from=build /config.yaml /pomerium/config.yaml
+COPY --from=build /go/bin/dlv /bin
+COPY scripts/debug-entrypoint.sh /
+ENTRYPOINT [ "/bin/pomerium" ]
+CMD ["-config","/pomerium/config.yaml"]

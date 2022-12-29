@@ -1,0 +1,45 @@
+authenticate_service_url: https://authenticate.0trust.click
+
+autocert: false
+certificates:
+  - cert: /root/pomerium/fullchain.pem
+    key: /root/pomerium/privkey.pem
+autocert_use_staging: false
+
+
+idp_provider: github
+idp_client_id: 92adfda03b03c9268362
+idp_client_secret: c6ee6e6213fd2c928c1303eae45d93ff4e01a023
+
+cookie_secret: WwMtDXWaRDMBQCylle8OJ+w4kLIDIGd8W3cB4/zFFtg=
+shared_secret: wCLbdelof3g8T6YRM53KzTzsjhI1r4BA5B0jGG+oGNo=
+databroker_storage_type: redis
+databroker_storage_connection_string: "redis://localhost:6379/0"
+
+routes:
+  - from: https://trangchu.0trust.click
+    to: http://localhost:8080/a1ecommerce/
+    allow_any_authenticated_user: true
+
+  - from: https://grafana.0trust.click
+    to: http://localhost:3000/
+    policy:
+      - allow:
+          or:
+            - email:
+                ends_with: '@vccorp.vn'
+    #policy:
+    #  - allow:
+    #      or:
+    #        - device:
+    #            type: any 
+
+  - from: tcp+https://redis.0trust.click:6379
+    to: tcp://127.0.0.1:6379
+    policy:
+      - allow:
+          or:
+            - email:
+                ends_with: '@gmail.com'
+                  #- device:
+

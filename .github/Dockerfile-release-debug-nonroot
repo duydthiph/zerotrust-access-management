@@ -1,0 +1,18 @@
+# build our own root trust store from current stable
+FROM debian:stable@sha256:1c3446475ac28a9f42a4627d8945d7bed88b8128b5850b61c5890ff47f317681 as casource
+RUN apt-get update && apt-get install -y ca-certificates
+# Remove expired root (https://github.com/pomerium/pomerium/issues/2653)
+RUN rm /usr/share/ca-certificates/mozilla/DST_Root_CA_X3.crt && update-ca-certificates
+
+
+FROM busybox:latest@sha256:caa382c432891547782ce7140fb3b7304613d3b0438834dce1cad68896ab110a as build
+RUN touch /config.yaml
+
+FROM gcr.io/distroless/base:debug-nonroot@sha256:dbce382b7e6bc34dd49db2c07b759797039ca144089a134617ac1de5a3bc5f27
+ENV AUTOCERT_DIR /data/autocert
+WORKDIR /pomerium
+COPY pomerium /bin/
+COPY --from=build /config.yaml /pomerium/config.yaml
+COPY --from=casource /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+ENTRYPOINT [ "/bin/pomerium" ]
+CMD ["-config","/pomerium/config.yaml"]

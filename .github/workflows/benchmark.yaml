@@ -1,0 +1,68 @@
+name: Benchmark
+
+permissions:
+  contents: write
+  deployments: write
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: [1.18.x]
+        node-version: [16.x]
+        platform: [ubuntu-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # pin@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - uses: actions/setup-node@2fddd8803e2f5c9604345a0b591c3020ee971a93 # pin@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: set env vars
+        run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # pin@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/cache@fd5de65bc895cf536527842281bea11763fefd77 # pin@v3
+        with:
+          path: |
+            ~/go/pkg
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: build dev docker image
+        run: |
+          ./scripts/build-dev-docker.bash
+
+      - name: start cluster
+        run: |
+          export POMERIUM_TAG=dev
+          cd ./integration/clusters/google-single
+          docker-compose up -d
+
+      - name: integration tests
+        run: |
+          go test -bench Benchmark ./integration/... | tee benchmark.txt
+
+      - name: store benchmark
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "go"
+          output-file-path: benchmark.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
